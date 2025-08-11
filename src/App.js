@@ -8,10 +8,17 @@ function App() {
   const [editId, setEditId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [page, setPage] = useState(1);
+  const [limit] = useState(7);
+  const [totalTasks, setTotalTasks] = useState(0);
+
   useEffect(() => {
     const fetchTodos = async () => {
+      setIsLoading(true);
       try {
-        const todos = await getTodos();
+        const result = await getTodos(page, limit);
+        const todos = result.data;
+        const total = result.total;
 
         const formattedTodos = todos.map((todo) => ({
           id: todo.id,
@@ -19,14 +26,8 @@ function App() {
           status: todo.completed ? "Done" : "To Do",
         }));
 
-        const toDoInitial = formattedTodos
-          .filter((t) => t.status === "To Do")
-          .slice(0, 2);
-        const doneInitial = formattedTodos
-          .filter((t) => t.status === "Done")
-          .slice(0, 1);
-
-        setTasks([...toDoInitial, ...doneInitial]);
+        setTasks(formattedTodos);
+        setTotalTasks(total);
       } catch (error) {
         console.error("Failed to fetch todos:", error);
       } finally {
@@ -34,7 +35,7 @@ function App() {
       }
     };
     fetchTodos();
-  }, []);
+  }, [page, limit]);
 
   const handleSubmit = async () => {
     if (taskName.trim() === "") return;
@@ -47,7 +48,6 @@ function App() {
         )
       );
 
-      // Call API to update (doesn't affect local state here)
       try {
         await updateTodo(editId, {
           title: taskName,
@@ -58,12 +58,11 @@ function App() {
         console.error("Error updating todo:", error);
       }
 
-      // Reset form
       setEditId(null);
       setTaskName("");
       setStatus("To Do");
     } else {
-      // Add new task
+      // Add new task without resetting page
       try {
         await addTodo({
           title: taskName,
@@ -71,13 +70,13 @@ function App() {
           userId: 1,
         });
 
-        // Generate a unique ID locally for new task (avoid duplicates)
-        const uniqueId = Date.now();
+        const uniqueId = Date.now(); // unique ID for local task
 
         setTasks((prev) => [
           { id: uniqueId, name: taskName, status: status },
           ...prev,
         ]);
+
         setTaskName("");
         setStatus("To Do");
       } catch (error) {
@@ -98,6 +97,8 @@ function App() {
 
     try {
       await deleteTodo(id);
+      // Optionally reload page if you want consistency
+      // setPage(page);
     } catch (error) {
       console.error("Error deleting todo:", error);
       setTasks(previousTasks);
@@ -129,6 +130,7 @@ function App() {
   );
 
   const columns = ["To Do", "Done"];
+  const totalPages = Math.ceil(totalTasks / limit);
 
   if (isLoading) {
     return (
@@ -140,7 +142,6 @@ function App() {
     <div className="min-h-screen bg-gray-100 p-6">
       <h1 className="text-3xl font-bold text-center mb-6">Task Board</h1>
 
-      {/* Input Section */}
       <div className="flex flex-col md:flex-row gap-3 justify-center mb-6">
         <input
           type="text"
@@ -165,7 +166,6 @@ function App() {
         </button>
       </div>
 
-      {/* Task Columns */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {columns.map((col) => (
           <div key={col} className="bg-white rounded shadow p-4">
@@ -175,6 +175,29 @@ function App() {
             ))}
           </div>
         ))}
+      </div>
+
+      {/* Pagination Controls */}
+      <div className="flex justify-center gap-3 mt-6">
+        <button
+          onClick={() => setPage((p) => Math.max(p - 1, 1))}
+          disabled={page === 1}
+          className="px-3 py-1 rounded bg-gray-300 disabled:opacity-50"
+        >
+          Prev
+        </button>
+
+        <span className="px-3 py-1">
+          Page {page} of {totalPages}
+        </span>
+
+        <button
+          onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+          disabled={page === totalPages}
+          className="px-3 py-1 rounded bg-gray-300 disabled:opacity-50"
+        >
+          Next
+        </button>
       </div>
     </div>
   );

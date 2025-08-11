@@ -12,10 +12,11 @@ function App() {
     const fetchTodos = async () => {
       try {
         const todos = await getTodos();
+
         const formattedTodos = todos.map((todo) => ({
           id: todo.id,
           name: todo.title,
-          status: todo.completed ? "Done" : "To Do"
+          status: todo.completed ? "Done" : "To Do",
         }));
 
         const toDoInitial = formattedTodos
@@ -24,6 +25,7 @@ function App() {
         const doneInitial = formattedTodos
           .filter((t) => t.status === "Done")
           .slice(0, 1);
+
         setTasks([...toDoInitial, ...doneInitial]);
       } catch (error) {
         console.error("Failed to fetch todos:", error);
@@ -37,31 +39,50 @@ function App() {
   const handleSubmit = async () => {
     if (taskName.trim() === "") return;
 
-    try {
-      if (editId !== null) {
-        const updatedTodo = await updateTodo(editId, {
-          name: taskName,
-          status
+    if (editId !== null) {
+      // Update existing task locally
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === editId ? { ...task, name: taskName, status: status } : task
+        )
+      );
+
+      // Call API to update (doesn't affect local state here)
+      try {
+        await updateTodo(editId, {
+          title: taskName,
+          completed: status === "Done",
+          userId: 1,
         });
-        setTasks((prev) =>
-          prev.map((task) =>
-            task.id === editId
-              ? { ...task, name: updatedTodo.title, status }
-              : task
-          )
-        );
-        setEditId(null);
-      } else {
-        const newTodo = await addTodo({ name: taskName, status });
-        setTasks((prev) => [
-          ...prev,
-          { id: newTodo.id, name: newTodo.title, status }
-        ]);
+      } catch (error) {
+        console.error("Error updating todo:", error);
       }
+
+      // Reset form
+      setEditId(null);
       setTaskName("");
       setStatus("To Do");
-    } catch (error) {
-      console.error("Error saving todo:", error);
+    } else {
+      // Add new task
+      try {
+        await addTodo({
+          title: taskName,
+          completed: status === "Done",
+          userId: 1,
+        });
+
+        // Generate a unique ID locally for new task (avoid duplicates)
+        const uniqueId = Date.now();
+
+        setTasks((prev) => [
+          { id: uniqueId, name: taskName, status: status },
+          ...prev,
+        ]);
+        setTaskName("");
+        setStatus("To Do");
+      } catch (error) {
+        console.error("Error adding todo:", error);
+      }
     }
   };
 
@@ -89,7 +110,7 @@ function App() {
 
   const TaskItem = ({ task }) => (
     <div className="flex justify-between items-center bg-gray-50 p-2 rounded mb-2">
-      <span>{task.name}</span>
+      <span className="text-gray-800">{task.name}</span>
       <div className="flex gap-2">
         <button
           onClick={() => handleEdit(task)}
@@ -111,9 +132,7 @@ function App() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        Loading...
-      </div>
+      <div className="min-h-screen flex items-center justify-center">Loading...</div>
     );
   }
 
@@ -121,13 +140,14 @@ function App() {
     <div className="min-h-screen bg-gray-100 p-6">
       <h1 className="text-3xl font-bold text-center mb-6">Task Board</h1>
 
+      {/* Input Section */}
       <div className="flex flex-col md:flex-row gap-3 justify-center mb-6">
         <input
           type="text"
           placeholder="Task name"
           value={taskName}
           onChange={(e) => setTaskName(e.target.value)}
-          className="border border-gray-300 rounded px-3 py-2 w-64"
+          className="border border-gray-300 rounded px-3 py-2 w-64 text-gray-900"
         />
         <select
           value={status}
@@ -145,6 +165,7 @@ function App() {
         </button>
       </div>
 
+      {/* Task Columns */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {columns.map((col) => (
           <div key={col} className="bg-white rounded shadow p-4">

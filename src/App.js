@@ -1,12 +1,94 @@
 import React, { useState, useEffect } from "react";
 import { getTodos, addTodo, updateTodo, deleteTodo } from "./components/api";
 
+// Pagination component (unchanged)
+function Pagination({ totalPages, currentPage, onPageChange, isLoading }) {
+  if (totalPages === 0) return null;
+
+  const pages = [];
+
+  pages.push(1);
+
+  let startPage = Math.max(2, currentPage - 1);
+  let endPage = Math.min(totalPages - 1, currentPage + 1);
+
+  if (currentPage <= 3) {
+    startPage = 2;
+    endPage = Math.min(4, totalPages - 1);
+  }
+  if (currentPage >= totalPages - 2) {
+    startPage = Math.max(totalPages - 3, 2);
+    endPage = totalPages - 1;
+  }
+
+  if (startPage > 2) {
+    pages.push("left-ellipsis");
+  }
+
+  for (let i = startPage; i <= endPage; i++) {
+    pages.push(i);
+  }
+
+  if (endPage < totalPages - 1) {
+    pages.push("right-ellipsis");
+  }
+
+  if (totalPages > 1) {
+    pages.push(totalPages);
+  }
+
+  return (
+    <div className="flex justify-center gap-2 mt-6 items-center">
+      <button
+        onClick={() => onPageChange(Math.max(currentPage - 1, 1))}
+        disabled={currentPage === 1 || isLoading}
+        className="px-3 py-1 rounded bg-gray-300 disabled:opacity-50"
+      >
+        Prev
+      </button>
+
+      {pages.map((page, idx) => {
+        if (page === "left-ellipsis" || page === "right-ellipsis") {
+          return (
+            <span key={page + idx} className="px-3 py-1 select-none">
+              ...
+            </span>
+          );
+        }
+
+        return (
+          <button
+            key={page}
+            onClick={() => onPageChange(page)}
+            disabled={isLoading}
+            className={`px-3 py-1 rounded ${
+              currentPage === page
+                ? "bg-blue-600 text-white"
+                : "bg-gray-300 hover:bg-gray-400"
+            }`}
+          >
+            {page}
+          </button>
+        );
+      })}
+
+      <button
+        onClick={() => onPageChange(Math.min(currentPage + 1, totalPages))}
+        disabled={currentPage === totalPages || isLoading}
+        className="px-3 py-1 rounded bg-gray-300 disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  );
+}
+
 function App() {
   const [taskName, setTaskName] = useState("");
   const [status, setStatus] = useState("To Do");
   const [tasks, setTasks] = useState([]);
   const [editId, setEditId] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // changed default to false
 
   const [page, setPage] = useState(1);
   const [limit] = useState(7);
@@ -41,7 +123,6 @@ function App() {
     if (taskName.trim() === "") return;
 
     if (editId !== null) {
-      // Update existing task locally
       setTasks((prev) =>
         prev.map((task) =>
           task.id === editId ? { ...task, name: taskName, status: status } : task
@@ -62,7 +143,6 @@ function App() {
       setTaskName("");
       setStatus("To Do");
     } else {
-      // Add new task without resetting page
       try {
         await addTodo({
           title: taskName,
@@ -70,7 +150,7 @@ function App() {
           userId: 1,
         });
 
-        const uniqueId = Date.now(); // unique ID for local task
+        const uniqueId = Date.now();
 
         setTasks((prev) => [
           { id: uniqueId, name: taskName, status: status },
@@ -97,8 +177,6 @@ function App() {
 
     try {
       await deleteTodo(id);
-      // Optionally reload page if you want consistency
-      // setPage(page);
     } catch (error) {
       console.error("Error deleting todo:", error);
       setTasks(previousTasks);
@@ -132,12 +210,6 @@ function App() {
   const columns = ["To Do", "Done"];
   const totalPages = Math.ceil(totalTasks / limit);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">Loading...</div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <h1 className="text-3xl font-bold text-center mb-6">Task Board</h1>
@@ -166,39 +238,26 @@ function App() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[200px] relative">
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-70 z-10 text-gray-700 font-semibold">
+            Loading tasks...
+          </div>
+        )}
         {columns.map((col) => (
           <div key={col} className="bg-white rounded shadow p-4">
             <h2 className="text-xl font-bold mb-3">{col}</h2>
             {getTasksByStatus(col).map((task) => (
               <TaskItem key={task.id} task={task} />
             ))}
+            {!isLoading && getTasksByStatus(col).length === 0 && (
+              <p className="text-gray-500">No tasks in this category.</p>
+            )}
           </div>
         ))}
       </div>
 
-      {/* Pagination Controls */}
-      <div className="flex justify-center gap-3 mt-6">
-        <button
-          onClick={() => setPage((p) => Math.max(p - 1, 1))}
-          disabled={page === 1}
-          className="px-3 py-1 rounded bg-gray-300 disabled:opacity-50"
-        >
-          Prev
-        </button>
-
-        <span className="px-3 py-1">
-          Page {page} of {totalPages}
-        </span>
-
-        <button
-          onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-          disabled={page === totalPages}
-          className="px-3 py-1 rounded bg-gray-300 disabled:opacity-50"
-        >
-          Next
-        </button>
-      </div>
+      <Pagination totalPages={totalPages} currentPage={page} onPageChange={setPage} isLoading={isLoading} />
     </div>
   );
 }
